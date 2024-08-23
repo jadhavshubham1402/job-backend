@@ -20,6 +20,8 @@ const {
   createApplicationStatus,
   getAllAppStatus,
   getResume,
+  getOtp,
+  updateUser,
 } = require("../service/service");
 const nodemailer = require("nodemailer");
 const { MongoClient } = require("mongodb");
@@ -122,16 +124,14 @@ async function forgotPassword(req, res) {
     }
     const sendMail = await sendEmail(email);
 
+    console.log(sendMail, "herereeeere");
+
     if (sendMail) {
       res.json({
         code: 200,
         message: "otp sent",
       });
     }
-
-    res.status(404)({
-      message: "Otp not sent",
-    });
   } catch (error) {
     console.log(error);
     res.status(404).send({ message: error.message });
@@ -151,21 +151,21 @@ async function sendEmail(email) {
       throw new Error(
         "Maximum attempt has been done, Please try after 15 minutes"
       );
-    } else if (getOneOtp && getOneOtp.expirationDate > new Date()) {
+    } else if (getOneOtp && getOneOtp.expiration > new Date()) {
       throw new Error("Please try after Sometime");
     }
 
     if (
       getOneOtp &&
       getOneOtp.attempt <= 5 &&
-      getOneOtp.expirationDate < new Date()
+      getOneOtp.expiration < new Date()
     ) {
       otpModify = await updateOtp(
         { email },
         {
           otp: otp,
           $inc: { attempts: 1 },
-          expirationDate: new Date(Date.now() + 2 * 60 * 1000),
+          expiration: new Date(Date.now() + 2 * 60 * 1000),
         }
       );
     }
@@ -173,38 +173,39 @@ async function sendEmail(email) {
       const otpData = {
         email: email,
         otp: otp,
-        expirationDate: new Date(Date.now() + 2 * 60 * 1000),
+        expiration: new Date(Date.now() + 2 * 60 * 1000),
       };
 
       otpModify = await createOtp(otpData);
     }
 
     if (otpModify) {
-      const transporter = nodemailer.createTransport({
-        service: "gmail", // Specify the email service (Gmail, Outlook, etc.)
+      let transporter = nodemailer.createTransport({
+        service: "gmail",
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false, // true for port 465, false for port 587
         auth: {
           user: "jadhav.shubham1402@gmail.com", // Your email address
-          pass: "Shubham@1999", // Your email password or app-specific password
+          pass: "uyjl acrv fplq eblr", // Your app password (not your email password)
         },
       });
 
-      const mailOptions = {
-        from: "jadhav.shubham1402@gmail.com", // Sender address
-        to: email, // List of recipients
-        subject: "Hello from Job Posting", // Subject line
-        text: "This is test job posting!", // Plain text body
-        html: `<p>This is a test OTP is <strong>${otp}</strong>!</p>`, // HTML body
-      };
-
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          return false;
-        }
-        return true;
+      // Send mail with the defined transport object
+      let info = await transporter.sendMail({
+        from: "akshata.jadhav1970@gmail.com", // Sender address
+        to: email, // List of receivers
+        subject: "OTP for forgot password", // Subject line
+        text: "Here we send otp for validation", // Plain text body
+        html: `<p>Your otp is ${otp}</p>`, // HTML body
       });
+      console.log(info);
+      return info;
     }
   } catch (error) {
-    res.status(404).send({ message: error.message });
+    console.log(error);
+    throw new Error(error.message);
+    // res.status(404).send({ message: error.message });
   }
 }
 
@@ -244,15 +245,14 @@ async function otpVerify(req, res) {
     session.startTransaction();
     let { email, otp, password } = req.body;
 
-    const getOneOtp = await getOtp(
-      {
-        email,
-        otp,
-        expirationDate: { $gte: new Date() },
-        attempts: { $lt: 5 },
-      },
-      { session }
-    );
+    console.log(otp, email);
+
+    const getOneOtp = await getOtp({
+      email,
+      otp,
+      expiration: { $gte: new Date() },
+      attempt: { $lt: 5 },
+    });
 
     if (!getOneOtp) {
       throw new Error("otp is not valid");
@@ -267,6 +267,7 @@ async function otpVerify(req, res) {
       await updateUser({ email }, update, { session });
       await deleteOtp({ email }, { session });
     }
+    session.commitTransaction();
   } catch (error) {
     console.log(error);
     session.abortTransaction();
@@ -422,6 +423,8 @@ async function createOneApplicationStatus(req, res) {
       throw new Error("application not found");
     }
 
+    const getUser = await getOneUser({ _id: getData.adminId });
+
     const getResumeData = await getResume({ userId });
 
     if (!getResumeData) {
@@ -436,44 +439,42 @@ async function createOneApplicationStatus(req, res) {
 
     const score = calculateRelevancyScore(getResumeData, getData.skills);
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail", // Specify the email service (Gmail, Outlook, etc.)
+    let transporter = nodemailer.createTransport({
+      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // true for port 465, false for port 587
       auth: {
         user: "jadhav.shubham1402@gmail.com", // Your email address
-        pass: "Shubham@1999", // Your email password or app-specific password
+        pass: "uyjl acrv fplq eblr", // Your app password (not your email password)
       },
     });
 
-    const mailOptions = {
-      from: "jadhav.shubham1402@gmail.com", // Sender address
-      to: "recipient@example.com", // List of recipients
-      subject: "Hello from NodeMailer", // Subject line
-      html: `<p>Your Application is ${"pending"}</p>`, // HTML body
-    };
-
-    // const sendmail = transporter.sendMail(mailOptions, (error, info) => {
-    // //   if (error) {
-    // //     throw new Error("Email not sent");
-    // //   }
-    //   return true;
-    // });
-
-    // if (sendmail) {
-    const createData = await createApplicationStatus({
-      userId,
-      applicationId,
-      relevancyScore: score,
+    // Send mail with the defined transport object
+    let info = transporter.sendMail({
+      from: `${req.decoded.user.name} <${req.decoded.user.email}>`, // Sender address
+      to: getUser.email, // List of receivers
+      subject: "Apply for job", // Subject line
+      text: "Here we send email to admin", // Plain text body
+      html: `<p>Application sent by the user ${req.decoded.user.name} from ${req.decoded.user.email} for ${getData.title}</p>`, // HTML body
     });
 
-    if (!createData) {
-      throw new Error("application not created");
+    if (info) {
+      const createData = await createApplicationStatus({
+        userId,
+        applicationId,
+        relevancyScore: score,
+      });
+
+      if (!createData) {
+        throw new Error("application not created");
+      }
+
+      res.json({
+        code: 200,
+        mesage: "applied successfully",
+      });
     }
-
-    res.json({
-      code: 200,
-      mesage: "applied successfully",
-    });
-    // }
   } catch (error) {
     console.log(error);
     res.status(404).send({ message: error.message });
@@ -495,6 +496,8 @@ async function updateOneApplicationStatus(req, res) {
     if (!getData) {
       throw new Error("Application not found");
     }
+
+    const getUser = await getOneUser({ _id: getData.userId });
 
     await updateAppStatus(
       {
@@ -519,31 +522,32 @@ async function updateOneApplicationStatus(req, res) {
       );
     }
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail", // Specify the email service (Gmail, Outlook, etc.)
+    let transporter = nodemailer.createTransport({
+      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // true for port 465, false for port 587
       auth: {
         user: "jadhav.shubham1402@gmail.com", // Your email address
-        pass: "Shubham@1999", // Your email password or app-specific password
+        pass: "uyjl acrv fplq eblr", // Your app password (not your email password)
       },
     });
 
-    const mailOptions = {
-      from: "jadhav.shubham1402@gmail.com", // Sender address
-      to: "recipient@example.com", // List of recipients
-      subject: "Hello from NodeMailer", // Subject line
-      html: `<p>Your Application is ${status}</p>`, // HTML body
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        throw new Error("Email not sent");
-      }
-
+    // Send mail with the defined transport object
+    let info = transporter.sendMail({
+      from: `${req.decoded.user.name} <${req.decoded.user.email}>`, // Sender address
+      to: getUser.email, // List of receivers
+      subject: "Reply to applied user", // Subject line
+      text: "Here we send email to user", // Plain text body
+      html: `<p>Your Application for ${getData.title} has been ${status} </p>`, // HTML body
+    });
+    if (info) {
       res.json({
         code: 200,
-        message: "application updated successfully",
+        message: success,
       });
-    });
+    }
+    session.commitTransaction();
   } catch (error) {
     console.log(error);
     session.abortTransaction();

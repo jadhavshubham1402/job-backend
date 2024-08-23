@@ -14,7 +14,7 @@ function createUser(userData) {
   return userSchema.create(userData);
 }
 
-function updateUser(filter, update, options = {}) {
+function updateUser(filter, update, options) {
   return userSchema.findOneAndUpdate(filter, update, options);
 }
 
@@ -23,16 +23,16 @@ function createOtp(data) {
   return otpSchema.create(data);
 }
 
-function getOtp(data, options = {}) {
-  return otpSchema.findOne(data, options);
+function getOtp(data) {
+  return otpSchema.findOne(data);
 }
 
 function updateOtp(filter, update) {
   return otpSchema.findOneAndUpdate(filter, update);
 }
 
-function deleteOtp(data) {
-  return otpSchema.deleteOne(data);
+function deleteOtp(data, options) {
+  return otpSchema.deleteOne(data, options);
 }
 
 //Application Crud
@@ -48,8 +48,8 @@ function getOneApplication(filter) {
   return applicationSchema.findOne(filter);
 }
 
-function getAppById(id){
-    return applicationSchema.findById(id)
+function getAppById(id) {
+  return applicationSchema.findById(id);
 }
 
 function getAllApplication(page, limit) {
@@ -134,5 +134,5 @@ module.exports = {
   createUserResume,
   updateUserResume,
   getResume,
-  getAppById
+  getAppById,
 };
