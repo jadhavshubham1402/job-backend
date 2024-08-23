@@ -270,13 +270,9 @@ async function otpVerify(req, res) {
         res.json({ code: 200, message: "otp verify" });
       }
     }
-    session.commitTransaction();
   } catch (error) {
     console.log(error);
-    session.abortTransaction();
     res.status(404).send({ message: error.message });
-  } finally {
-    session.endSession();
   }
 }
 
@@ -348,6 +344,8 @@ async function createOneApplication(req, res) {
     if (req.decoded.user.type != "admin") {
       throw new Error("You dont have access to this route");
     }
+
+    req.body["adminId"] = req.decoded.user._id;
     const createData = await createApplication(req.body);
 
     if (!createData) {
@@ -427,6 +425,7 @@ async function createOneApplicationStatus(req, res) {
     }
 
     const getUser = await getOneUser({ _id: getData.adminId });
+    console.log(getUser, "getUser");
 
     const getResumeData = await getResume({ userId });
 
@@ -513,7 +512,7 @@ async function updateOneApplicationStatus(req, res) {
     if (status == "approved") {
       await updateApplication(
         { _id: getData.applicationId },
-        { status: "inactive" },
+        { status: "inactive", userId: getData.userId },
         { session }
       );
       await updateManyAppStatus(
@@ -547,7 +546,7 @@ async function updateOneApplicationStatus(req, res) {
     if (info) {
       res.json({
         code: 200,
-        message: success,
+        message: "success",
       });
     }
     session.commitTransaction();
