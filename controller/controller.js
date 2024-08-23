@@ -25,7 +25,6 @@ const {
 } = require("../service/service");
 const nodemailer = require("nodemailer");
 const { MongoClient } = require("mongodb");
-const mongoose = require("mongoose");
 const client = new MongoClient(process.env.MONGO_URL);
 
 // user login register forgotPassword
@@ -240,9 +239,7 @@ const calculateRelevancyScore = (resume, jobPosting) => {
 };
 
 async function otpVerify(req, res) {
-  const session = client.startSession();
   try {
-    session.startTransaction();
     let { email, otp, password } = req.body;
 
     console.log(otp, email);
@@ -264,8 +261,14 @@ async function otpVerify(req, res) {
         update = { ...update, password: bcrypt.hashSync(password, 10) };
       }
 
-      await updateUser({ email }, update, { session });
-      await deleteOtp({ email }, { session });
+      const [updateData, deleteData] = await Promise.all([
+        updateUser({ email }, update),
+        deleteOtp({ email }),
+      ]);
+
+      if (updateData && deleteData) {
+        res.json({ code: 200, message: "otp verify" });
+      }
     }
     session.commitTransaction();
   } catch (error) {
