@@ -16,13 +16,16 @@ const {
   getOneApplication,
   getOneAppStatus,
   getAllApplication,
+  createUserResume,
+  createApplicationStatus,
+  getAllAppStatus,
+  getResume,
 } = require("../service/service");
 const nodemailer = require("nodemailer");
 const { MongoClient } = require("mongodb");
 const mongoose = require("mongoose");
 const client = new MongoClient(process.env.MONGO_URL);
 
-const ObjectId = mongoose.Schema.Types.ObjectId;
 // user login register forgotPassword
 
 async function login(req, res) {
@@ -220,6 +223,21 @@ function generateOTP(length = 6) {
   return otp;
 }
 
+const calculateRelevancyScore = (resume, jobPosting) => {
+  let score = 0;
+  const totalRequirements = jobPosting.length;
+
+  // Count matches for skills
+  const matchedSkills = resume.skills.filter((skill) =>
+    jobPosting.includes(skill)
+  );
+  score += (matchedSkills.length / totalRequirements) * 100;
+
+  // Additional scoring based on experience or other criteria can be added here
+
+  return score;
+};
+
 async function otpVerify(req, res) {
   const session = client.startSession();
   try {
@@ -344,9 +362,6 @@ async function createOneApplication(req, res) {
 
 async function getApplication(req, res) {
   try {
-    if (req.decoded.user.type != "admin") {
-      throw new Error("You dont have access to this route");
-    }
     const getData = await getAllApplication(req.body);
 
     res.json({
@@ -365,13 +380,27 @@ async function updateOneApplication(req, res) {
       throw new Error("You dont have access to this route");
     }
 
-    const { filter, update } = req.body;
+    const { _id } = req.body;
 
-    await updateApplication(filter, update);
+    await updateApplication({ _id }, req.body);
 
     res.json({
       code: 200,
       message: "application updated",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(404).send({ message: error.message });
+  }
+}
+
+async function getOneAppForm(req, res) {
+  try {
+    const getData = await getOneApplication(req.body);
+
+    res.json({
+      code: 200,
+      data: getData,
     });
   } catch (error) {
     console.log(error);
@@ -385,13 +414,27 @@ async function createOneApplicationStatus(req, res) {
     const { applicationId } = req.body;
 
     const getData = await getOneApplication({
-      id: applicationId,
-      status: "active",
+      _id: applicationId,
+      //   status: "active",
     });
 
     if (!getData) {
       throw new Error("application not found");
     }
+
+    const getResumeData = await getResume({ userId });
+
+    if (!getResumeData) {
+      throw new Error("kindly upload your resume");
+    }
+
+    const getStatus = await getOneAppStatus({ applicationId, userId });
+
+    if (getStatus) {
+      throw new Error("Already Apply for given Post");
+    }
+
+    const score = calculateRelevancyScore(getResumeData, getData.skills);
 
     const transporter = nodemailer.createTransport({
       service: "gmail", // Specify the email service (Gmail, Outlook, etc.)
@@ -405,31 +448,32 @@ async function createOneApplicationStatus(req, res) {
       from: "jadhav.shubham1402@gmail.com", // Sender address
       to: "recipient@example.com", // List of recipients
       subject: "Hello from NodeMailer", // Subject line
-      html: `<p>Your Application is ${status}</p>`, // HTML body
+      html: `<p>Your Application is ${"pending"}</p>`, // HTML body
     };
 
-    const sendmail = transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        throw new Error("Email not sent");
-      }
-      return true;
+    // const sendmail = transporter.sendMail(mailOptions, (error, info) => {
+    // //   if (error) {
+    // //     throw new Error("Email not sent");
+    // //   }
+    //   return true;
+    // });
+
+    // if (sendmail) {
+    const createData = await createApplicationStatus({
+      userId,
+      applicationId,
+      relevancyScore: score,
     });
 
-    if (sendmail) {
-      const createData = await createApplicationStatus({
-        userId,
-        applicationId,
-      });
-
-      if (!createData) {
-        throw new Error("application not created");
-      }
-
-      res.json({
-        code: 200,
-        mesage: "applied successfully",
-      });
+    if (!createData) {
+      throw new Error("application not created");
     }
+
+    res.json({
+      code: 200,
+      mesage: "applied successfully",
+    });
+    // }
   } catch (error) {
     console.log(error);
     res.status(404).send({ message: error.message });
@@ -444,9 +488,9 @@ async function updateOneApplicationStatus(req, res) {
       throw new Error("You dont have access to this route");
     }
     session.startTransaction();
-    const { id, status } = req.body;
+    const { id, status, reason } = req.body;
 
-    const getData = await getOneAppStatus(id);
+    const getData = await getOneAppStatus({ _id: id });
 
     if (!getData) {
       throw new Error("Application not found");
@@ -454,15 +498,15 @@ async function updateOneApplicationStatus(req, res) {
 
     await updateAppStatus(
       {
-        id,
+        _id: id,
       },
-      { status: status },
+      { status: status, reason: reason },
       { session }
     );
 
     if (status == "approved") {
       await updateApplication(
-        { id: getData.applicationId },
+        { _id: getData.applicationId },
         { status: "inactive" },
         { session }
       );
@@ -509,6 +553,78 @@ async function updateOneApplicationStatus(req, res) {
   }
 }
 
+async function getAllApplicationStatus(req, res) {
+  try {
+    const getData = await getAllAppStatus(req.body);
+
+    const data = [];
+
+    for (const element of getData) {
+      const getApp = await getOneApplication({ _id: element.applicationId });
+
+      console.log(getApp, "here");
+
+      const getUserData = await getResume({ userId: element.userId });
+
+      data.push({
+        _id: element._id,
+        title: getApp?.title,
+        description: getApp?.description,
+        firstName: getUserData?.firstName,
+        lastName: getUserData?.lastName,
+        mobileNo: getUserData?.mobileNo,
+        salary: getApp?.salary,
+        currentSalary: getUserData?.currentSalary,
+        expectedSalary: getUserData?.expectedSalary,
+        relevancyScore: element?.relevancyScore,
+        status: element?.status,
+        reason: element?.reason,
+        createdAt: element?.createdAt,
+      });
+    }
+
+    res.json({
+      code: 200,
+      data: data,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(404).send({ message: error.message });
+  }
+}
+
+//resume
+async function createResume(req, res) {
+  try {
+    console.log(req.file);
+    req.body["resumeLink"] = req.file.path.replace(/\\/g, "/");
+
+    req.body["userId"] = req.decoded.user._id;
+
+    const createData = await createUserResume(req.body);
+
+    if (!createData) {
+      throw new Error("Resume not added");
+    }
+
+    res.json({
+      code: 200,
+      mesage: "data added successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(404).send({ message: error.message });
+  }
+}
+
+async function updateResume(req, res) {
+  try {
+  } catch (error) {
+    console.log(error);
+    res.status(404).send({ message: error.message });
+  }
+}
+
 module.exports = {
   login,
   sendOtp,
@@ -519,7 +635,11 @@ module.exports = {
   getJobField,
   createOneApplication,
   updateOneApplication,
+  getOneAppForm,
   createOneApplicationStatus,
   updateOneApplicationStatus,
   getApplication,
+  getAllApplicationStatus,
+  createResume,
+  updateResume,
 };

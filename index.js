@@ -4,12 +4,15 @@ const app = express();
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const connectToDatabase = require("./databaseConnect/databaseConnect");
+const path = require("path");
 const router = require("./route/routes");
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 app.use(cors());
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(express.json());
 

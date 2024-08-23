@@ -1,7 +1,9 @@
 const applicationSchema = require("../model/applicationSchema");
 const jobfieldSchema = require("../model/jobfieldSchema");
 const otpSchema = require("../model/otpSchema");
+const userResumeSchema = require("../model/userResumeSchema");
 const userSchema = require("../model/userSchema");
+const applicationStatusSchema = require("../model/applicationStatus");
 
 //user CRUD
 function getOneUser(data) {
@@ -46,9 +48,14 @@ function getOneApplication(filter) {
   return applicationSchema.findOne(filter);
 }
 
-function getAllApplication(page,limit) {
+function getAppById(id){
+    return applicationSchema.findById(id)
+}
+
+function getAllApplication(page, limit) {
   return applicationSchema
     .find()
+    .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 }
@@ -68,19 +75,40 @@ function updateJobfield(filter, update) {
 
 // application status
 function getOneAppStatus(filter) {
-  return applicationSchema.findById(filter);
+  return applicationStatusSchema.findOne(filter);
 }
 
 function createApplicationStatus(data) {
-  return applicationSchema.create(data);
+  return applicationStatusSchema.create(data);
 }
 
 function updateAppStatus(filter, update) {
-  return applicationSchema.findOneAndUpdate(filter, update);
+  return applicationStatusSchema.findOneAndUpdate(filter, update);
 }
 
 function updateManyAppStatus(filter, update) {
-  return applicationSchema.updateMany(filter, update);
+  return applicationStatusSchema.updateMany(filter, update);
+}
+
+function getAllAppStatus(page, limit) {
+  return applicationStatusSchema
+    .find()
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+}
+
+//resume
+function createUserResume(data) {
+  return userResumeSchema.create(data);
+}
+
+function updateUserResume(filter, update) {
+  return userResumeSchema.findOneAndUpdate(filter, update);
+}
+
+function getResume(filter) {
+  return userResumeSchema.findOne(filter);
 }
 
 module.exports = {
@@ -99,7 +127,12 @@ module.exports = {
   createJobField,
   updateJobfield,
   getOneAppStatus,
+  getAllAppStatus,
   createApplicationStatus,
   updateAppStatus,
   updateManyAppStatus,
+  createUserResume,
+  updateUserResume,
+  getResume,
+  getAppById
 };

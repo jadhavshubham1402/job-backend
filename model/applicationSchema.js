@@ -39,6 +39,11 @@ const applicationSchema = new mongoose.Schema(
     adminId: {
       type: mongoose.Schema.Types.ObjectId,
     },
+    status: {
+        type: String,
+        default: "active",
+        enum: ["active", "inactive"],
+      },
   },
   { timestamps: true }
 );
